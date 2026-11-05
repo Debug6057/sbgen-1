@@ -8,6 +8,7 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <map>
 
 using namespace Star;
 
@@ -17,6 +18,24 @@ thread_local std::string lastError;
 struct Handle {
   DirectivesGroup group;
   Image result;
+  // where the images that blends and masks refer to are read from
+  PackedAssetSource *refs = nullptr;
+  std::map<String, Image> cache;
+
+  ImageReferenceCallback callback() {
+    if (!refs)
+      return {};
+    return [this](String const &name) -> Image const * {
+      auto found = cache.find(name);
+      if (found == cache.end()) {
+        Image image = Image::readPng(make_shared<Buffer>(refs->read(name)));
+        if (image.pixelFormat() != PixelFormat::RGBA32)
+          image = image.convert(PixelFormat::RGBA32);
+        found = cache.emplace(name, std::move(image)).first;
+      }
+      return &found->second;
+    };
+  }
 };
 
 template <typename F>
@@ -47,6 +66,11 @@ void *sb_directives_new(char const *data, size_t len) {
 }
 
 void sb_directives_free(void *handle) { delete static_cast<Handle *>(handle); }
+
+// Reads the images that the directives refer to (blendmult, addmask and the like) from this pack
+void sb_directives_use_images(void *handle, void *pak) {
+  static_cast<Handle *>(handle)->refs = static_cast<PackedAssetSource *>(pak);
+}
 
 // Loads (parses) every operation. The engine does this lazily, on first use,
 // for strings of 1000 characters and more. Returns the number of operations or
@@ -79,7 +103,7 @@ uint8_t const *sb_directives_apply(void *handle, uint8_t const *rgba,
         auto *h = static_cast<Handle *>(handle);
         Image input(width, height, PixelFormat::RGBA32);
         std::memcpy(input.data(), rgba, size_t(width) * height * 4);
-        h->result = h->group.applyNewImage(input);
+        h->result = h->group.applyNewImage(input, h->callback());
         if (h->result.pixelFormat() != PixelFormat::RGBA32)
           h->result = h->result.convert(PixelFormat::RGBA32);
         *outWidth = h->result.width();
@@ -110,7 +134,7 @@ uint8_t const *sb_directives_apply_sequential(void *handle, uint8_t const *rgba,
             throw StarException(
                 "directives contain an operation that fails to parse");
           if (!operation.is<NullImageOperation>())
-            processImageOperation(operation, image);
+            processImageOperation(operation, image, h->callback());
         });
         h->result = std::move(image);
         if (h->result.pixelFormat() != PixelFormat::RGBA32)

@@ -63,6 +63,14 @@ enum Command {
         #[arg(short, long)]
         output: Option<PathBuf>,
     },
+    /// generates the emote directives for a 387x344 emote sheet, for the identity's emoteDirectives
+    Emote {
+        sheet: PathBuf,
+        #[arg(value_enum)]
+        species: Species,
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+    },
     /// generates custom humanoid body directives
     Humanoid {
         #[arg(value_enum)]
@@ -124,6 +132,11 @@ fn main() -> anyhow::Result<()> {
             output,
         } => generator::generate_pants(&pants, hide_body, output),
         Command::Back { back, output } => generator::generate_back(&back, output),
+        Command::Emote {
+            sheet,
+            species,
+            output,
+        } => sbgen::emote::generate(&sheet, species, output),
         Command::Humanoid {
             body_type,
             species,

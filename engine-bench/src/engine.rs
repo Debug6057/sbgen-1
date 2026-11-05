@@ -6,6 +6,7 @@ unsafe extern "C" {
     fn sb_last_error() -> *const c_char;
     fn sb_directives_new(data: *const c_char, len: usize) -> *mut c_void;
     fn sb_directives_free(handle: *mut c_void);
+    fn sb_directives_use_images(handle: *mut c_void, pak: *mut c_void);
     fn sb_directives_load(handle: *mut c_void) -> c_long;
     fn sb_directives_apply(
         handle: *mut c_void,
@@ -95,6 +96,11 @@ impl Directives {
             bail!("directives rejected: {}", last_error());
         }
         Ok(Directives(handle))
+    }
+
+    /// Reads the images blends and masks refer to from the pack, which has to outlive the directives.
+    pub fn use_images_from(&mut self, pak: &Pak) {
+        unsafe { sb_directives_use_images(self.0, pak.0) }
     }
 
     /// Parses all of the operations, which the engine otherwise does on first use. Returns how many there are.
