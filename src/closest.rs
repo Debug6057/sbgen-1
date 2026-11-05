@@ -573,6 +573,7 @@ pub fn generate(
     image: &std::path::Path,
     packs: &[std::path::PathBuf],
     options: &Options,
+    output_type: generator::SpriteOutputType,
     output: Option<std::path::PathBuf>,
 ) -> Result<()> {
     use anyhow::Context;
@@ -633,7 +634,7 @@ pub fn generate(
                     best.mismatches
                 );
             }
-            best.image()
+            generator::sprite_content(output_type, "", Some(&best.image()))
         }
         None => {
             eprintln!("no asset does better, building the sprite from nothing");
@@ -651,7 +652,9 @@ pub fn generate(
                     0,
                 ),
             );
-            generator::do_generate(&inputs, &generator::data::SINGLE, "image")?.directives
+            let directives =
+                generator::do_generate(&inputs, &generator::data::SINGLE, "image")?.directives;
+            generator::sprite_content(output_type, &directives, None)
         }
     };
     generator::write_output(output, &format!("{name}.txt"), content)

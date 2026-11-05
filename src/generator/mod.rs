@@ -1066,11 +1066,22 @@ pub fn generate_sprite(
     let mut attachments = Inputs::new();
     attachments.insert("image".to_string(), (image, 0));
     let result = do_generate(&attachments, &SINGLE, "image")?;
-    let directives = &result.directives;
     eprintln!("{}", result.description);
-    let content = match output_type {
-        SpriteOutputType::Raw => result.directives,
-        SpriteOutputType::Hat => to_string_pretty(&json!({
+    let content = sprite_content(output_type, &result.directives, None);
+    write_output(output, &format!("{name}.txt"), content)
+}
+
+/// The text for a sprite.
+/// `directives` are applied to the missing asset unless `image` is a whole image path, i.e. an asset
+/// and its directives, that draws the sprite already, which objects can use as their picture.
+pub fn sprite_content(
+    output_type: SpriteOutputType,
+    directives: &str,
+    image: Option<&str>,
+) -> String {
+    match (output_type, image) {
+        (SpriteOutputType::Raw, image) => image.unwrap_or(directives).to_owned(),
+        (SpriteOutputType::Hat, _) => to_string_pretty(&json!({
             "name" : "eyepatchhead",
             "count" : 1,
             "parameters" : {
@@ -1082,7 +1093,19 @@ pub fn generate_sprite(
             }
         }))
         .unwrap(),
-        SpriteOutputType::Object => to_string_pretty(&json!({
+        (SpriteOutputType::Object, Some(image)) => to_string_pretty(&json!({
+            "name" : "perfectlygenericitem",
+            "count" : 1,
+            "parameters" : {
+                "shortdescription" : "Custom Object",
+                "description" : "Generated Object",
+                "inventoryIcon" : image,
+                // merged into the left and right orientations which keep flipping and spaces
+                "customOrientations" : [{"image" : image}, {"image" : image}]
+            }
+        }))
+        .unwrap(),
+        (SpriteOutputType::Object, None) => to_string_pretty(&json!({
             "name" : "perfectlygenericitem",
             "count" : 1,
             "parameters" : {
@@ -1093,22 +1116,30 @@ pub fn generate_sprite(
             }
         }))
         .unwrap(),
-        SpriteOutputType::FloatingObject => {
+        (SpriteOutputType::FloatingObject, image) => {
             eprintln!("(floating objects are not flippable)");
+            let mut parameters = json!({
+                "shortdescription" : "Custom Object",
+                "description" : "Generated Object",
+            });
+            match image {
+                Some(image) => {
+                    parameters["inventoryIcon"] = image.into();
+                    parameters["customOrientations"] = json!([{"image" : image}]);
+                }
+                None => {
+                    parameters["inventoryIcon"] = format!("/assetmissing.png{directives}").into();
+                    parameters["color"] = format!("default{directives};").into();
+                }
+            }
             to_string_pretty(&json!({
                 "name" : "protectoratebooks",
                 "count" : 1,
-                "parameters" : {
-                    "shortdescription" : "Custom Object",
-                    "description" : "Generated Object",
-                    "inventoryIcon" : format!("/assetmissing.png{directives}"),
-                    "color" : format!("default{directives};")
-                }
+                "parameters" : parameters
             }))
             .unwrap()
         }
-    };
-    write_output(output, &format!("{name}.txt"), content)
+    }
 }
 
 pub fn generate_shirt(
@@ -1398,5 +1429,39 @@ mod tests {
         let decoded = decode_rgba(&rgba).unwrap();
         assert_eq!(decoded, reference(&rgba));
         assert_eq!(decoded.get_pixel(1, 1), &Rgba([0; 4]));
+    }
+
+    #[test]
+    fn objects_swap_their_image_for_a_whole_image_path() {
+        let image = "/a.png?crop=0;0;1;1";
+        let object: serde_json::Value =
+            serde_json::from_str(&sprite_content(SpriteOutputType::Object, "", Some(image)))
+                .unwrap();
+        let parameters = &object["parameters"];
+        assert_eq!(parameters["inventoryIcon"], image);
+        assert_eq!(
+            parameters["customOrientations"].as_array().unwrap().len(),
+            2
+        );
+        assert!(parameters.get("color").is_none());
+
+        let floating: serde_json::Value = serde_json::from_str(&sprite_content(
+            SpriteOutputType::FloatingObject,
+            "",
+            Some(image),
+        ))
+        .unwrap();
+        assert_eq!(
+            floating["parameters"]["customOrientations"][0]["image"],
+            image
+        );
+
+        let built = sprite_content(SpriteOutputType::Object, "?crop=0;0;1;1", None);
+        assert!(built.contains("default?crop=0;0;1;1;"));
+        assert!(!built.contains("customOrientations"));
+        assert_eq!(
+            sprite_content(SpriteOutputType::Raw, "?x", Some(image)),
+            image
+        );
     }
 }

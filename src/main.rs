@@ -20,7 +20,8 @@ enum Command {
         image: PathBuf,
         #[arg(short = 't', long = "type", value_enum, default_value_t = SpriteOutputType::Raw)]
         output_type: SpriteOutputType,
-        /// looks for a game asset that the sprite is a crop, flip and recolor of (raw output only)
+        /// looks for a game asset that the sprite is a crop, flip and recolor of.
+        /// Only for raw and object output, not hats!
         #[arg(long)]
         closest: bool,
         /// the packed assets to look in, later ones replacing earlier ones (default: the game's own)
@@ -92,9 +93,9 @@ fn main() -> anyhow::Result<()> {
             under,
             max_mismatch,
         } => {
-            if !matches!(output_type, SpriteOutputType::Raw) {
+            if matches!(output_type, SpriteOutputType::Hat) {
                 anyhow::bail!(
-                    "--closest only makes the raw output: hats and objects apply their directives to an image of their own"
+                    "--closest can't make hats: a worn hat is drawn from the hat's own frames with the directives applied"
                 );
             }
             let options = sbgen::closest::Options {
@@ -102,7 +103,7 @@ fn main() -> anyhow::Result<()> {
                 max_mismatch,
                 ..Default::default()
             };
-            sbgen::closest::generate(&image, &assets, &options, output)
+            sbgen::closest::generate(&image, &assets, &options, output_type, output)
         }
         Command::Sprite {
             image,
