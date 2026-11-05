@@ -23,6 +23,7 @@ Applies the directives that sbgen generates with the OpenStarbound engine to che
 - `orientation <png>` checks whether a png decodes the same in the engine and in the `image` crate (which it does not, see below!).
 - `emote_prefix <species> [restarts] [seed] [out.json]` searches a prefix for the emote frames of a species and writes the frame set for `src/generator/framesets/emote_<species>.json`.
 - `emote <sheet.png> <species> [vanilla dir]` applies what `sbgen emote` made to the vanilla emote frames of the species with the engine and says how many pixels differ from the sheet.
+- `interpret [directive files]` applies the same directives to the same images with the engine and with `sbgen::interpret` (the port that `sbgen convert` draws with) and compares every pixel. `PAIR=1 interpret old.txt new.txt` checks that converted directives draw what the old ones did.
 - `closest <sprite.png> "<asset path><directives>"` applies what `sbgen sprite --closest` made with the engine and says how many pixels differ from the sprite.
 - `closest.sh <sprite.png> [sbgen options]`, on a sprite, checks the length of the `--closest` directives and of the ones built from nothing, whether the engine draws the sprite from each and the instructions of applying them.
 - `cargo bench` runs criterion with `parse`, `apply_frame`, `apply_frame_in_order` and `apply_sheet`.

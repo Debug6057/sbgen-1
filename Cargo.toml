@@ -3,6 +3,7 @@ name = "sbgen"
 version = "0.2.0"
 edition = "2024"
 authors = ["kae"]
+repository = "https://github.com/OpenStarbound/StarGen"
 
 [dependencies]
 mimalloc = { version = "0.1.52" }

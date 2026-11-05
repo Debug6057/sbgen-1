@@ -63,6 +63,20 @@ enum Command {
         #[arg(short, long)]
         output: Option<PathBuf>,
     },
+    /// draws the image that the directives of another generator make and generates it again to make them shorter
+    Convert {
+        /// a png file or an asset of the game like /assetmissing.png, which can have the directives after it (?...)
+        image: String,
+        /// the directives, or @file to read them from a file
+        directives: Option<String>,
+        /// the packed assets to read images from, later ones replacing earlier ones, defaults to the game's own
+        #[arg(long = "assets")]
+        assets: Vec<PathBuf>,
+        #[arg(short = 't', long = "type", value_enum, default_value_t = SpriteOutputType::Raw)]
+        output_type: SpriteOutputType,
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+    },
     /// generates the emote directives for a 387x344 emote sheet, for the identity's emoteDirectives
     Emote {
         sheet: PathBuf,
@@ -135,6 +149,13 @@ fn main() -> anyhow::Result<()> {
             output,
         } => generator::generate_pants(&pants, hide_body, output),
         Command::Back { back, output } => generator::generate_back(&back, output),
+        Command::Convert {
+            image,
+            directives,
+            assets,
+            output_type,
+            output,
+        } => sbgen::convert::convert(&image, directives.as_deref(), &assets, output_type, output),
         Command::Emote {
             sheet,
             species,

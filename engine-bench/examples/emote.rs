@@ -26,7 +26,13 @@ fn main() -> Result<()> {
     let vanilla = Image::decode(&vanilla)?;
     let custom = Image::decode(&std::fs::read(&args[1])?)?;
     let png = std::fs::read(&args[1])?;
-    let directives = emote::directives(&png, species)?;
+
+    // EMOTE_DIRECTIVES=<file> to check another tool's directives.
+    // Example: Advanced Hatter's instead of sbgen's.
+    let directives = match std::env::var_os("EMOTE_DIRECTIVES") {
+        Some(file) => std::fs::read_to_string(file)?.trim().to_string(),
+        None => emote::directives(&png, species)?,
+    };
     println!("{} chars of directives", directives.len());
     let mut directives = Directives::new(&directives)?;
     directives.use_images_from(&pak);
