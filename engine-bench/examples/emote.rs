@@ -25,8 +25,9 @@ fn main() -> Result<()> {
     };
     let vanilla = Image::decode(&vanilla)?;
     let custom = Image::decode(&std::fs::read(&args[1])?)?;
-    let rgba = image::load_from_memory(&std::fs::read(&args[1])?)?.into_rgba8();
-    let directives = emote::emote_directives(&rgba, species)?;
+    let png = std::fs::read(&args[1])?;
+    let directives = emote::directives(&png, species)?;
+    println!("{} chars of directives", directives.len());
     let mut directives = Directives::new(&directives)?;
     directives.use_images_from(&pak);
     directives.load()?;

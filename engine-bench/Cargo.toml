@@ -9,6 +9,7 @@ description = "applies sbgen's directives with the real OpenStarbound engine, to
 sbgen = { path = ".." }
 image = { version = "0.25.10", default-features = false, features = ["png"] }
 anyhow = "1.0.104"
+serde_json = "1"
 
 [build-dependencies]
 cc = "1"

@@ -11,7 +11,11 @@
 //! A single `?replace` then maps the keys of the sprite's opaque pixels to their colors.
 //! The prefixes, in `emote/species.json`, are the ones that tool uses.
 //! Each one picks the frames apart by the colors of a few pixels of the species' own emote sheet.
-use crate::generator::{Species, create_replacer_string, decode_rgba};
+use crate::generator::{
+    Input, Inputs, Species, create_replacer_string,
+    data::{self, FrameSet},
+    decode_rgba, do_generate,
+};
 use anyhow::{Context, Result, bail};
 use image::RgbaImage;
 use serde_json::Value;
@@ -170,7 +174,7 @@ pub fn known_ids(species: Species) -> Result<Vec<u8>> {
 }
 
 /// The frames that can't be set for the species, see `known_ids`.
-pub fn unreachable_frames(species: Species) -> Result<Vec<Frame>> {
+pub fn legacy_unreachable_frames(species: Species) -> Result<Vec<Frame>> {
     let ids = known_ids(species)?;
     Ok(frames()
         .into_iter()
@@ -184,7 +188,7 @@ pub fn key(id: u8, x: u32, y: u32) -> [u8; 4] {
     [x as u8, id, (FRAME_SIZE - 1 - y) as u8, 0]
 }
 
-pub fn emote_directives(sheet: &RgbaImage, species: Species) -> Result<String> {
+pub fn legacy_directives(sheet: &RgbaImage, species: Species) -> Result<String> {
     let (width, height) = sheet.dimensions();
     if height != FRAME_SIZE * 8 || width < FRAME_SIZE * 8 {
         bail!(
@@ -212,13 +216,75 @@ pub fn emote_directives(sheet: &RgbaImage, species: Species) -> Result<String> {
     Ok(out)
 }
 
-pub fn generate(sheet: &std::path::Path, species: Species, output: Option<PathBuf>) -> Result<()> {
+/// The frame set of the species.
+///
+/// A prefix that turns its frames into 2x2 images with distinct corners and shows where the frames are in the sheet.
+/// Frames that look the same as an earlier one in the vanilla sheet are not in it.
+pub fn frame_set(species: Species) -> Result<&'static FrameSet> {
+    Ok(match species {
+        Species::Apex => &data::EMOTE_APEX,
+        Species::Avian => &data::EMOTE_AVIAN,
+        Species::Floran => &data::EMOTE_FLORAN,
+        Species::Glitch => &data::EMOTE_GLITCH,
+        Species::Human => &data::EMOTE_HUMAN,
+        Species::Hylotl => &data::EMOTE_HYLOTL,
+        Species::Novakid => &data::EMOTE_NOVAKID,
+        Species::Other => bail!("there are no emote prefixes for other species"),
+    })
+}
+
+/// The frames that the species' frame set does not have, because the vanilla sheet draws them like an earlier frame
+pub fn unreachable_frames(species: Species) -> Result<Vec<Frame>> {
+    let set = frame_set(species)?;
+    Ok(frames()
+        .into_iter()
+        .filter(|frame| !set.entries.iter().any(|entry| entry.frame == frame.name))
+        .collect())
+}
+
+/// The emote directives of the sheet (a png file), made with the generator
+pub fn directives(png: &[u8], species: Species) -> Result<String> {
+    let (width, height) = image::ImageReader::new(std::io::Cursor::new(png))
+        .with_guessed_format()?
+        .into_dimensions()?;
+    if (width, height) != (FRAME_SIZE * 9, FRAME_SIZE * 8) {
+        bail!(
+            "the emote sheet should be {}x{}, this one is {width}x{height}",
+            FRAME_SIZE * 9,
+            FRAME_SIZE * 8
+        );
+    }
+    let input = Input {
+        filename: "emote.png".to_owned(),
+        data: png.to_vec(),
+        width,
+        height,
+    };
+    let mut inputs = Inputs::new();
+    inputs.insert("emote".to_string(), (input, 9));
+    Ok(do_generate(&inputs, frame_set(species)?, "emote")?.directives)
+}
+
+/// `legacy` makes the directives the way Advanced Hatter does, a key for every pixel, which are several times longer
+pub fn generate(
+    sheet: &std::path::Path,
+    species: Species,
+    legacy: bool,
+    output: Option<PathBuf>,
+) -> Result<()> {
     let data =
         std::fs::read(sheet).with_context(|| format!("failed to read {}", sheet.display()))?;
-    let image =
-        decode_rgba(&data).with_context(|| format!("failed to decode {}", sheet.display()))?;
-    let directives = emote_directives(&image, species)?;
-    for frame in unreachable_frames(species)? {
+    let (directives, left_out) = if legacy {
+        let image =
+            decode_rgba(&data).with_context(|| format!("failed to decode {}", sheet.display()))?;
+        (
+            legacy_directives(&image, species)?,
+            legacy_unreachable_frames(species)?,
+        )
+    } else {
+        (directives(&data, species)?, unreachable_frames(species)?)
+    };
+    for frame in left_out {
         eprintln!(
             "(the {} frame {} looks like another one to the prefix, so it is left out)",
             species_name(species)?,

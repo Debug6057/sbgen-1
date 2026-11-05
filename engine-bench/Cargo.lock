@@ -346,6 +346,7 @@ dependencies = [
  "criterion",
  "image",
  "sbgen",
+ "serde_json",
 ]
 
 [[package]]

@@ -68,6 +68,9 @@ enum Command {
         sheet: PathBuf,
         #[arg(value_enum)]
         species: Species,
+        /// the longer directives of Advanced Hatter, a key for every pixel
+        #[arg(long)]
+        legacy: bool,
         #[arg(short, long)]
         output: Option<PathBuf>,
     },
@@ -135,8 +138,9 @@ fn main() -> anyhow::Result<()> {
         Command::Emote {
             sheet,
             species,
+            legacy,
             output,
-        } => sbgen::emote::generate(&sheet, species, output),
+        } => sbgen::emote::generate(&sheet, species, legacy, output),
         Command::Humanoid {
             body_type,
             species,

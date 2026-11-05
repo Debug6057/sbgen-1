@@ -69,6 +69,13 @@ macro_rules! frameset {
 }
 
 frameset!(SINGLE, "single");
+frameset!(EMOTE_HUMAN, "emote_human");
+frameset!(EMOTE_APEX, "emote_apex");
+frameset!(EMOTE_AVIAN, "emote_avian");
+frameset!(EMOTE_FLORAN, "emote_floran");
+frameset!(EMOTE_GLITCH, "emote_glitch");
+frameset!(EMOTE_HYLOTL, "emote_hylotl");
+frameset!(EMOTE_NOVAKID, "emote_novakid");
 frameset!(CHEST, "chest");
 frameset!(PANTS, "pants");
 frameset!(FROG_PANTS, "frog_pants");
