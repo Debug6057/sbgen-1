@@ -24,6 +24,13 @@
             mold # fast linker
             pkg-config
 
+            # web build
+            lld # wasm-ld, rustc here ships no rust-lld
+            wasm-bindgen-cli # must match the wasm-bindgen crate in Cargo.lock
+            binaryen # wasm-opt
+            python3 # for serving web/ locally
+            prettier # formats web/
+
             # cargo helpers
             cargo-nextest
             cargo-watch

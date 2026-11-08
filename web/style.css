@@ -1,0 +1,181 @@
+:root {
+  color-scheme: light dark;
+  --bg: #fff;
+  --fg: #1c1c22;
+  --muted: #666;
+  --line: #d4d4dc;
+  --accent: #5b4bd6;
+  --err: #b3261e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16161c;
+    --fg: #e8e8ee;
+    --muted: #9a9aa6;
+    --line: #34343e;
+    --accent: #9d90ff;
+    --err: #ff8a80;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font:
+    16px/1.5 system-ui,
+    sans-serif;
+}
+
+main {
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: 1.5rem 16px 3rem;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.6rem;
+}
+
+a {
+  color: var(--accent);
+}
+
+.sub {
+  color: var(--muted);
+  margin: 0 0 1.25rem;
+}
+
+#help {
+  margin: 0 0 1rem;
+  color: var(--muted);
+}
+
+/* tabs */
+
+#tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+}
+
+#tabs button[aria-selected="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* form */
+
+form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.8rem;
+}
+
+label {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+label.check {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+button,
+select,
+input[type="file"] {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.35rem 0.8rem;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+}
+
+button[type="submit"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+  justify-self: start;
+  font-weight: 600;
+}
+
+select,
+input[type="file"] {
+  width: 100%;
+  min-width: 0;
+}
+
+select {
+  padding: 0.3rem;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+#status {
+  margin-left: 0.6rem;
+  color: var(--muted);
+}
+
+/* result */
+
+#result {
+  margin-top: 1.5rem;
+}
+
+#description {
+  white-space: pre-wrap;
+  color: var(--muted);
+  margin: 0 0 0.5rem;
+}
+
+textarea {
+  width: 100%;
+  height: 14rem;
+  font:
+    13px/1.4 ui-monospace,
+    monospace;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.5rem;
+  resize: vertical;
+}
+
+.row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+#error {
+  color: var(--err);
+  margin-top: 1rem;
+  white-space: pre-wrap;
+}
+
+footer {
+  margin-top: 2.5rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}

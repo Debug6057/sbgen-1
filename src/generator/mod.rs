@@ -4,7 +4,7 @@ use serde_json::{json, to_string_pretty};
 use std::fmt::Write;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
-use std::time::Instant;
+use web_time::Instant;
 type HashMap<K, V> = std::collections::HashMap<K, V, FixedState>;
 type HashSet<T> = std::collections::HashSet<T, FixedState>;
 use anyhow::{Context, Result, bail};
@@ -413,18 +413,25 @@ pub fn load_input(path: &Path) -> Result<Input> {
         |name| name.to_string_lossy().into_owned(),
     );
     let data = std::fs::read(path).with_context(|| format!("failed to read {}", path.display()))?;
-    let dimensions = image::ImageReader::new(Cursor::new(&data))
-        .with_guessed_format()?
-        .into_dimensions();
-    let Ok((width, height)) = dimensions else {
-        bail!("{filename} is not an image")
-    };
-    Ok(Input {
-        filename,
-        data,
-        width,
-        height,
-    })
+    Input::from_bytes(filename, data)
+}
+
+impl Input {
+    /// `filename` is only used in messages
+    pub fn from_bytes(filename: String, data: Vec<u8>) -> Result<Input> {
+        let dimensions = image::ImageReader::new(Cursor::new(&data))
+            .with_guessed_format()?
+            .into_dimensions();
+        let Ok((width, height)) = dimensions else {
+            bail!("{filename} is not an image")
+        };
+        Ok(Input {
+            filename,
+            data,
+            width,
+            height,
+        })
+    }
 }
 
 pub fn write_output(output: Option<PathBuf>, default: &str, content: String) -> Result<()> {
@@ -1063,12 +1070,25 @@ pub fn generate_sprite(
 ) -> Result<()> {
     let image = load_input(image)?;
     let name = image.filename.trim_end_matches(".png").to_string();
+    let result = sprite(image, output_type)?;
+    eprintln!("{}", result.description);
+    write_output(output, &format!("{name}.txt"), result.content)
+}
+
+/// What a generator made and what to tell the user about it
+pub struct Generated {
+    pub description: String,
+    pub content: String,
+}
+
+pub fn sprite(image: Input, output_type: SpriteOutputType) -> Result<Generated> {
     let mut attachments = Inputs::new();
     attachments.insert("image".to_string(), (image, 0));
     let result = do_generate(&attachments, &SINGLE, "image")?;
-    eprintln!("{}", result.description);
-    let content = sprite_content(output_type, &result.directives, None);
-    write_output(output, &format!("{name}.txt"), content)
+    Ok(Generated {
+        content: sprite_content(output_type, &result.directives, None),
+        description: result.description,
+    })
 }
 
 /// The text for a sprite.
@@ -1149,18 +1169,35 @@ pub fn generate_shirt(
     back_sleeve: Option<PathBuf>,
     output: Option<PathBuf>,
 ) -> Result<()> {
+    let load = |path: Option<PathBuf>| path.map(|path| load_input(&path)).transpose();
+    let result = shirt(
+        load(chest_female)?,
+        load(chest_male)?,
+        load(front_sleeve)?,
+        load(back_sleeve)?,
+    )?;
+    eprintln!("{}", result.description);
+    write_output(output, "custom_shirt.json", result.content)
+}
+
+pub fn shirt(
+    chest_female: Option<Input>,
+    chest_male: Option<Input>,
+    front_sleeve: Option<Input>,
+    back_sleeve: Option<Input>,
+) -> Result<Generated> {
     let mut attachments = Inputs::new();
     if let Some(x) = chest_female {
-        attachments.insert("chestf".to_string(), (load_input(&x)?, 2));
+        attachments.insert("chestf".to_string(), (x, 2));
     }
     if let Some(x) = chest_male {
-        attachments.insert("chestm".to_string(), (load_input(&x)?, 2));
+        attachments.insert("chestm".to_string(), (x, 2));
     }
     if let Some(x) = front_sleeve {
-        attachments.insert("fsleeve".to_string(), (load_input(&x)?, 9));
+        attachments.insert("fsleeve".to_string(), (x, 9));
     }
     if let Some(x) = back_sleeve {
-        attachments.insert("bsleeve".to_string(), (load_input(&x)?, 9));
+        attachments.insert("bsleeve".to_string(), (x, 9));
     }
     let result = do_generate(&attachments, &CHEST, "chest")?;
     let mut item = ITEM_TEMPLATE.clone();
@@ -1175,12 +1212,10 @@ pub fn generate_shirt(
             }
         }),
     );
-    eprintln!("{}", result.description);
-    write_output(
-        output,
-        "custom_shirt.json",
-        to_string_pretty(&item).unwrap(),
-    )
+    Ok(Generated {
+        description: result.description,
+        content: to_string_pretty(&item).unwrap(),
+    })
 }
 
 fn tail_advice(str: &mut String) {
@@ -1189,13 +1224,19 @@ fn tail_advice(str: &mut String) {
 }
 
 pub fn generate_pants(pants: &Path, hide_body: bool, output: Option<PathBuf>) -> Result<()> {
+    let result = self::pants(load_input(pants)?, hide_body)?;
+    eprintln!("{}", result.description);
+    write_output(output, "custom_pants.json", result.content)
+}
+
+pub fn pants(pants: Input, hide_body: bool) -> Result<Generated> {
     let (frame_set, id) = if hide_body {
         (&FROG_PANTS, "frog_pants")
     } else {
         (&PANTS, "pants")
     };
     let mut attachments = Inputs::new();
-    attachments.insert("pants".to_string(), (load_input(pants)?, 9));
+    attachments.insert("pants".to_string(), (pants, 9));
     let mut result = do_generate(&attachments, frame_set, id)?;
     let mut item = ITEM_TEMPLATE.clone();
     merge_json(
@@ -1210,17 +1251,21 @@ pub fn generate_pants(pants: &Path, hide_body: bool, output: Option<PathBuf>) ->
         }),
     );
     tail_advice(&mut result.description);
-    eprintln!("{}", result.description);
-    write_output(
-        output,
-        "custom_pants.json",
-        to_string_pretty(&item).unwrap(),
-    )
+    Ok(Generated {
+        description: result.description,
+        content: to_string_pretty(&item).unwrap(),
+    })
 }
 
 pub fn generate_back(back: &Path, output: Option<PathBuf>) -> Result<()> {
+    let result = self::back(load_input(back)?)?;
+    eprintln!("{}", result.description);
+    write_output(output, "custom_back.json", result.content)
+}
+
+pub fn back(back: Input) -> Result<Generated> {
     let mut attachments = Inputs::new();
-    attachments.insert("back".to_string(), (load_input(back)?, 9));
+    attachments.insert("back".to_string(), (back, 9));
     let result = do_generate(&attachments, &BACK, "back")?;
     let mut item = ITEM_TEMPLATE.clone();
     merge_json(
@@ -1234,8 +1279,10 @@ pub fn generate_back(back: &Path, output: Option<PathBuf>) -> Result<()> {
             }
         }),
     );
-    eprintln!("{}", result.description);
-    write_output(output, "custom_back.json", to_string_pretty(&item).unwrap())
+    Ok(Generated {
+        description: result.description,
+        content: to_string_pretty(&item).unwrap(),
+    })
 }
 
 #[derive(Clone, Copy, ValueEnum, PartialOrd, PartialEq)]
@@ -1265,6 +1312,27 @@ pub fn generate_humanoid(
     back_arm: Option<PathBuf>,
     output: Option<PathBuf>,
 ) -> Result<()> {
+    let load = |path: Option<PathBuf>| path.map(|path| load_input(&path)).transpose();
+    let result = humanoid(
+        body_type,
+        species,
+        load(body)?,
+        load(head)?,
+        load(front_arm)?,
+        load(back_arm)?,
+    )?;
+    eprintln!("{}", result.description);
+    write_output(output, "body_directives.txt", result.content)
+}
+
+pub fn humanoid(
+    body_type: BodyType,
+    species: Species,
+    body: Option<Input>,
+    head: Option<Input>,
+    front_arm: Option<Input>,
+    back_arm: Option<Input>,
+) -> Result<Generated> {
     let mut attachments = Inputs::new();
     let (frame_set, body_name, head_name) = match body_type {
         BodyType::Male => (
@@ -1288,21 +1356,23 @@ pub fn generate_humanoid(
         ),
     };
     if let Some(x) = body {
-        attachments.insert(body_name.to_string(), (load_input(&x)?, 9));
+        attachments.insert(body_name.to_string(), (x, 9));
     }
     if let Some(x) = head {
-        attachments.insert(head_name.to_string(), (load_input(&x)?, 1));
+        attachments.insert(head_name.to_string(), (x, 1));
     }
     if let Some(x) = front_arm {
-        attachments.insert("frontarm".to_string(), (load_input(&x)?, 9));
+        attachments.insert("frontarm".to_string(), (x, 9));
     }
     if let Some(x) = back_arm {
-        attachments.insert("backarm".to_string(), (load_input(&x)?, 9));
+        attachments.insert("backarm".to_string(), (x, 9));
     }
     let mut result = do_generate(&attachments, frame_set, "humanoid")?;
     tail_advice(&mut result.description);
-    eprintln!("{}", result.description);
-    write_output(output, "body_directives.txt", result.directives)
+    Ok(Generated {
+        description: result.description,
+        content: result.directives,
+    })
 }
 
 #[cfg(test)]

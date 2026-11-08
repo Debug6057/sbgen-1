@@ -4,3 +4,5 @@ pub mod emote;
 pub mod generator;
 pub mod interpret;
 pub mod pak;
+#[cfg(target_family = "wasm")]
+pub mod web;

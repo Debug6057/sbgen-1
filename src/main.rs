@@ -2,6 +2,7 @@ use clap::{Parser, Subcommand};
 use sbgen::generator::{self, BodyType, Species, SpriteOutputType};
 use std::path::PathBuf;
 
+#[cfg(not(target_family = "wasm"))]
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
