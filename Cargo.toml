@@ -35,9 +35,6 @@ harness = false
 name = "closest"
 harness = false
 
-[lib]
-crate-type = ["cdylib", "rlib"]
-
 # mimalloc is C and the browser has no use for it
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 mimalloc = { version = "0.1.52" }

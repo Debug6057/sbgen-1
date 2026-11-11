@@ -22,10 +22,15 @@ jobs:
       - uses: cachix/install-nix-action@v31
       - name: Build the wasm
         run: nix develop --command web/build.sh
+      - name: Collect the site
+        run: |
+          mkdir site
+          cp web/index.html web/style.css web/app.js web/worker.js site/
+          cp -r web/pkg site/pkg
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: web
+          path: site
   deploy:
     needs: build
     runs-on: ubuntu-latest

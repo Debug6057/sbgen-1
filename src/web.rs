@@ -44,7 +44,8 @@ fn option<T: ValueEnum>(name: &str) -> Result<T, JsError> {
 }
 
 fn input(name: &str, data: Vec<u8>) -> Result<Input, JsError> {
-    Input::from_bytes(name.to_owned(), data).map_err(error)
+    // the message reads "the female chest is not an image"
+    Input::from_bytes(format!("the {name}"), data).map_err(error)
 }
 
 /// an optional image, where an empty array means that none was given
