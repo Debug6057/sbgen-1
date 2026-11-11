@@ -11,18 +11,17 @@ const SPECIES = [
 // fields: file (optional unless required), select, check
 const COMMANDS = {
   sprite: {
-    title: "Sprite",
+    title: "Generic Sprite",
     help: "A single sprite of up to 256x256 pixels as directives, or an item that wears them.",
     fields: [
       { name: "image", label: "Image", type: "file", required: true },
       {
         name: "type",
-        label: "Output",
+        label: "Output Format",
         type: "select",
         options: ["raw", "hat", "object", "floating-object"],
       },
     ],
-    json: (v) => v.type !== "raw",
     run: (v) => ["sprite", [v.image, v.type]],
   },
   chest: {
@@ -38,7 +37,6 @@ const COMMANDS = {
       v.chestFemale.length || v.chestMale.length
         ? null
         : "Give at least one of the chests.",
-    json: () => true,
     run: (v) => [
       "shirt",
       [v.chestFemale, v.chestMale, v.frontSleeve, v.backSleeve],
@@ -55,14 +53,12 @@ const COMMANDS = {
         type: "check",
       },
     ],
-    json: () => true,
     run: (v) => ["pants", [v.pants, v.hideBody]],
   },
   back: {
     title: "Back",
     help: "A custom back item.",
     fields: [{ name: "back", label: "Back", type: "file", required: true }],
-    json: () => true,
     run: (v) => ["back", [v.back]],
   },
   humanoid: {
@@ -106,36 +102,21 @@ const COMMANDS = {
   },
 };
 
-let worker;
-let loadError = null;
+const worker = new Worker(new URL("./worker.js", import.meta.url), {
+  type: "module",
+});
 let nextId = 0;
 const pending = new Map();
-const failAll = (message) => {
-  for (const { reject } of pending.values()) reject(new Error(message));
+worker.onmessage = ({ data }) => {
+  const { resolve, reject } = pending.get(data.id);
+  pending.delete(data.id);
+  data.error === undefined ? resolve(data) : reject(new Error(data.error));
+};
+worker.onerror = (event) => {
+  for (const { reject } of pending.values())
+    reject(new Error(event.message || "the worker failed"));
   pending.clear();
 };
-// a panic leaves the wasm instance unusable, so a crashed worker is replaced
-function startWorker() {
-  worker?.terminate();
-  worker = new Worker(new URL("./worker.js", import.meta.url), {
-    type: "module",
-  });
-  worker.onmessage = ({ data }) => {
-    if (data.loadError !== undefined) {
-      loadError = `The generator failed to load: ${data.loadError}`;
-      showLoadError();
-      return;
-    }
-    const { resolve, reject } = pending.get(data.id);
-    pending.delete(data.id);
-    if (data.crashed) startWorker();
-    data.error === undefined ? resolve(data) : reject(new Error(data.error));
-  };
-  worker.onerror = (event) => {
-    failAll(event.message || "the worker failed");
-    startWorker();
-  };
-}
 const call = (command, args) =>
   new Promise((resolve, reject) => {
     const id = nextId++;
@@ -153,25 +134,26 @@ const description = $("description");
 const errorBox = $("error");
 const status = $("status");
 let current = "sprite";
-let downloadExtension = "txt";
-
-function showLoadError() {
-  if (!loadError) return;
-  errorBox.textContent = loadError;
-  errorBox.hidden = false;
-}
 
 function show(key) {
   current = key;
   const command = COMMANDS[key];
+
   for (const button of tabs.children)
     button.setAttribute("aria-selected", String(button.dataset.key === key));
+
   help.textContent = command.help;
   form.replaceChildren();
+
+  form.append(help);
+  form.append(document.createElement("hr"));
+
   for (const field of command.fields) {
     const label = document.createElement("label");
     const text = document.createElement("span");
-    text.textContent = field.label + (field.required ? " *" : "");
+
+    text.innerHTML = field.label + (field.required ? '<label class="requiredIcon" title="Required">*</label>' : "");
+
     let input;
     if (field.type === "select") {
       input = document.createElement("select");
@@ -182,17 +164,19 @@ function show(key) {
       if (field.type === "file") input.accept = "image/png";
     }
     input.name = field.name;
-    label.className = field.type === "check" ? "check" : "";
+    label.className = field.type === "check" ? "check" : "file";
     label.append(...(field.type === "check" ? [input, text] : [text, input]));
     form.append(label);
   }
+  
   const submit = document.createElement("button");
   submit.type = "submit";
+  submit.className = "submit";
   submit.textContent = "Generate";
   form.append(submit);
+
   result.hidden = true;
   errorBox.hidden = true;
-  showLoadError();
 }
 
 async function values(command) {
@@ -211,65 +195,69 @@ async function values(command) {
   return out;
 }
 
-form.onsubmit = async (event) => {
-  event.preventDefault();
-  const command = COMMANDS[current];
-  errorBox.hidden = true;
-  result.hidden = true;
-  try {
-    if (loadError) throw new Error(loadError);
-    const v = await values(command);
-    const missing = command.fields.find(
-      (field) => field.required && !v[field.name].length,
+function init() {
+  form.onsubmit = async (event) => {
+    event.preventDefault();
+    const command = COMMANDS[current];
+    errorBox.hidden = true;
+    result.hidden = true;
+    try {
+      const v = await values(command);
+      const missing = command.fields.find(
+        (field) => field.required && !v[field.name].length,
+      );
+      if (missing) throw new Error(`${missing.label} is needed.`);
+      const problem = command.need?.(v);
+      if (problem) throw new Error(problem);
+
+      status.textContent = "Generating...";
+      status.style.display = "unset";
+
+      const [name, args] = command.run(v);
+      const reply = await call(name, args);
+      output.value = reply.content;
+      description.textContent =
+        reply.description || `${reply.content.length} chars`;
+      result.hidden = false;
+    } catch (error) {
+      errorBox.textContent = error.message;
+      errorBox.hidden = false;
+    } finally {
+      status.textContent = "";
+      status.style.display = "none";
+    }
+  };
+
+  $("copy").onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(output.value);
+      $("copy").textContent = "Copied!";
+    } catch {
+      output.select();
+      $("copy").textContent = "Select and copy";
+    }
+    setTimeout(() => ($("copy").textContent = "Copy"), 1500);
+  };
+
+  $("download").onclick = () => {
+    const link = document.createElement("a");
+    const json = output.value.trimStart().startsWith("{");
+    link.href = URL.createObjectURL(
+      new Blob([output.value], { type: "text/plain" }),
     );
-    if (missing) throw new Error(`${missing.label} is needed.`);
-    const problem = command.need?.(v);
-    if (problem) throw new Error(problem);
-    status.textContent = "Generating...";
-    const [name, args] = command.run(v);
-    const reply = await call(name, args);
-    output.value = reply.content;
-    downloadExtension = command.json?.(v) ? "json" : "txt";
-    description.textContent =
-      reply.description || `${reply.content.length} chars`;
-    result.hidden = false;
-  } catch (error) {
-    errorBox.textContent = error.message;
-    errorBox.hidden = false;
-  } finally {
-    status.textContent = "";
+    link.download = `${current}.${json ? "json" : "txt"}`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  };
+
+  const modeSelector = document.createElement("select");
+  for (const [key, command] of Object.entries(COMMANDS)) {
+    modeSelector.appendChild(new Option(command.title, key));
   }
-};
+  modeSelector.addEventListener("change", function() {show(this.value)})
+  tabs.append(modeSelector)
 
-$("copy").onclick = async () => {
-  try {
-    await navigator.clipboard.writeText(output.value);
-    $("copy").textContent = "Copied";
-  } catch {
-    output.select();
-    $("copy").textContent = "Select and copy";
-  }
-  setTimeout(() => ($("copy").textContent = "Copy"), 1500);
-};
-
-$("download").onclick = () => {
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(
-    new Blob([output.value], { type: "text/plain" }),
-  );
-  link.download = `${current}.${downloadExtension}`;
-  link.click();
-  URL.revokeObjectURL(link.href);
-};
-
-startWorker();
-for (const [key, command] of Object.entries(COMMANDS)) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.role = "tab";
-  button.dataset.key = key;
-  button.textContent = command.title;
-  button.onclick = () => show(key);
-  tabs.append(button);
+  show(current);
 }
-show(current);
+
+init();

@@ -9,18 +9,19 @@
       content="Generates compact directives for custom Starbound sprites, in the browser."
     />
     <link rel="stylesheet" href="style.css" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
   </head>
   <body>
     <main>
       <h1>sbgen</h1>
       <p class="sub">
-        Compact directives for custom Starbound sprites. Everything runs in your
-        browser, no image leaves it.
+        Compact directives for custom Starbound sprites. Everything runs locally, and no image ever leaves your browser.
+        &ensp;<a id="repository" href="https://github.com/OpenStarbound/sbgen">Source on GitHub</a>
       </p>
       <div id="tabs" role="tablist"></div>
       <p id="help"></p>
       <form id="form"></form>
-      <span id="status" role="status"></span>
+      <span id="status" role="status" style="display: none"></span>
       <p id="error" role="alert" hidden></p>
       <section id="result" hidden>
         <p id="description"></p>
@@ -30,9 +31,6 @@
           ><button id="download" type="button">Download</button>
         </div>
       </section>
-      <footer>
-        <a href="https://github.com/OpenStarbound/sbgen">Source on GitHub</a>
-      </footer>
     </main>
     <script type="module" src="app.js"></script>
   </body>
